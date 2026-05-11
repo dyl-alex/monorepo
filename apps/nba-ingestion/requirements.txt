@@ -1,0 +1,6 @@
+nba_api
+pandas
+psycopg[binary]
+python-dotenv
+tenacity
+pydantic
