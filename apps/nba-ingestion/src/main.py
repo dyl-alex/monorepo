@@ -9,6 +9,7 @@ from jobs.sync_players import sync_players
 from jobs.sync_games import sync_games
 from jobs.sync_player_game_stats import sync_player_game_stats
 from jobs.sync_team_game_stats import sync_team_game_stats
+from jobs.enrich_team_game_advanced import enrich_team_game_advanced
 
 logger = logging.getLogger(__name__)
 
@@ -26,11 +27,13 @@ def main() -> None:
             "sync-games",
             "sync-player-game-stats",
             "sync-team-game-stats",
+            "enrich-team-game-advanced",
             "sync-daily",
             "backfill",
         ],
     )
     parser.add_argument("--season", default=settings.default_season)
+    parser.add_argument("--limit", type=int, default=None)
 
     args = parser.parse_args()
 
@@ -48,6 +51,9 @@ def main() -> None:
 
     elif args.command == "sync-team-game-stats":
         sync_team_game_stats(args.season)
+
+    elif args.command == "enrich-team-game-advanced":
+        enrich_team_game_advanced(args.season, args.limit)
 
     elif args.command == "sync-daily":
         sync_teams()

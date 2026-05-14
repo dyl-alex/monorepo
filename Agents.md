@@ -1,76 +1,211 @@
 # NBA Analytics App — Agent Context
 
-## Project Summary
-
-This project is a personal NBA analytics application built inside a Turborepo. The goal is to ingest historical and advanced NBA statistics from `swar/nba_api`, store them in a local Supabase/Postgres database, and expose the data to a Next.js dashboard through a typed tRPC layer.
-
-The app prioritizes free access to deep NBA stats over production-grade API reliability. `nba_api` is unofficial and may have rate limits/timeouts, so ingestion should be resilient, idempotent, and cache/store data locally.
-
 ## Current Project Stage
-
-Current progress:
-
-- Repo folder structure exists.
-- Local Supabase has been started.
-- Core schema migration has been created.
-- DB types need to be generated or verified.
-- Python ingestion app shell exists.
-- Currently implementing `sync_teams`.
-
-Implementation checklist:
 
 1. Create repo folder structure (X)
 2. Start local Supabase (X)
 3. Add migrations for core schema (X)
 4. Generate DB types (X)
 5. Create Python ingestion app (X)
-6. Implement teams sync
-7. Implement players sync
-8. Implement games sync
-9. Implement player/team game stats sync
-10. Add raw response storage
-11. Containerize ingestion app
-12. Add local Docker Compose commands
-13. Add cron command
-14. Add tRPC queries
-15. Build graph metadata
-16. Build dashboard UI
-17. Add advanced endpoints over time
+6. Implement teams sync (X)
+7. Implement players sync (X)
+8. Implement games sync (X)
+9. Add raw response storage — IN PROGRESS
+   - Team/player game stat syncs are running
+   - `BoxScoreAdvancedV2` has intermittent malformed responses
+   - Jobs were hardened to skip/log malformed responses
+   - Needs DB verification for normalized rows + raw rows
+10. Containerize ingestion app
+11. Add local Docker Compose commands
+12. Add cron command
+13. Add tRPC queries
+14. Build graph metadata
+15. Build dashboard UI
+16. Add advanced endpoints over time
 
-## Technology Stack
+---
 
-### Monorepo
+# Commands
+
+## Start local Supabase
+
+Run from monorepo root:
+
+```bash
+supabase start
+```
+
+---
+
+## Generate DB types
+
+Run from monorepo root:
+
+```bash
+supabase gen types typescript --local > packages/db-types/src/database.types.ts
+```
+
+IMPORTANT:
+- Review `packages/db-types/src/database.types.ts`
+- This is the source of truth for DB structure/types
+
+---
+
+## Python ingestion setup
+
+Run from:
+
+```txt
+apps/nba-ingestion
+```
+
+Create venv:
+
+```bash
+python -m venv .venv
+```
+
+Activate venv:
+
+### PowerShell
+
+```powershell
+.venv\Scripts\Activate.ps1
+```
+
+### Bash/macOS/Linux
+
+```bash
+source .venv/bin/activate
+```
+
+Install deps:
+
+```bash
+pip install -r requirements.txt
+```
+
+Create env file:
+
+### PowerShell
+
+```powershell
+Copy-Item .env.example .env
+```
+
+### Bash
+
+```bash
+cp .env.example .env
+```
+
+---
+
+## Run ingestion commands
+
+Run from:
+
+```txt
+apps/nba-ingestion/src
+```
+
+### Teams
+
+```bash
+python -m main sync-teams
+```
+
+### Players
+
+```bash
+python -m main sync-players
+```
+
+### Games
+
+```bash
+python -m main sync-games --season 2024-25
+```
+
+### Team game stats
+
+```bash
+python -m main sync-team-game-stats --season 2024-25
+```
+
+### Player game stats
+
+```bash
+python -m main sync-player-game-stats --season 2024-25
+```
+
+### Daily sync
+
+```bash
+python -m main sync-daily
+```
+
+### Backfill
+
+```bash
+python -m main backfill --season 2024-25
+```
+
+---
+
+# Architecture
+
+```txt
+nba_api
+  ↓
+Python ingestion app
+  ↓
+Supabase/Postgres
+  ↓
+tRPC
+  ↓
+Next.js frontend (nba-compare-v2)
+  -react query
+  -shadcn
+  -shadcn charts
+```
+
+---
+
+# Tech Stack
+
+## Monorepo
 
 - Turborepo
 - pnpm
 - Multiple Next.js apps
-- nba-compare-v2 will be the NBA analytics frontend
+- `nba-compare-v2` is the NBA frontend
 
-### Database
+## Database
 
-- Supabase local instance
+- Supabase local
 - Postgres
 - Supabase migrations
 - Generated TypeScript DB types
 
-### Ingestion
+## Ingestion
 
-- Python app located at `apps/nba-ingestion`
-- Uses `swar/nba_api`
-- Uses `psycopg` to connect directly to Postgres
-- Uses `.env` for database config
-- Future plan: run through Docker and cron
+- Python app: `apps/nba-ingestion`
+- `swar/nba_api`
+- `psycopg`
+- `.env`
+- Future: Docker + cron
 
-### Frontend/API
+## Frontend/API
 
 - Next.js
-- tRPC endpoint layer
-- React Query/TanStack Query for fetching
-- Dynamic charting/graphing UI
+- tRPC
+- React Query
+- Dynamic graphing/chart UI
 
-## Database Schema Scope
+---
 
-Core tables:
+# Core Tables
 
 - `teams`
 - `players`
@@ -84,57 +219,64 @@ Core tables:
 - `raw_api_responses`
 - `ingestion_runs`
 
-Important design rules:
+---
 
-- Use NBA IDs as natural keys where possible.
-  - `players.player_id` = NBA `PERSON_ID`
-  - `teams.team_id` = NBA `TEAM_ID`
-  - `games.game_id` = NBA `GAME_ID`
-- Keep normalized stat tables for querying/graphing.
-- Store raw endpoint responses in `raw_api_responses`.
-- All ingestion jobs must be idempotent.
-- Use `INSERT ... ON CONFLICT DO UPDATE` for upserts.
-- Do not call `nba_api` directly from the frontend.
+# Rules
 
-## Data Mapping Plan
-- IMPORTANT - review packages\db-types\src\database.types.ts for database structure, types, ect. 
+- Use NBA IDs as natural keys
+- Use idempotent jobs
+- Use upserts:
+  ```sql
+  INSERT ... ON CONFLICT DO UPDATE
+  ```
+- Store raw endpoint responses
+- Do NOT call `nba_api` from frontend
+- Python talks directly to Postgres
+- Prefer small incremental changes
+- Add logging to every ingestion job
+- Avoid redesigning architecture unless explicitly asked
 
+---
 
-Implementation Guidelines For Agents: 
-- Prefer small, incremental changes.
-- Do not redesign the architecture unless explicitly asked.
-- Keep Python ingestion isolated from Next.js apps.
-- Use direct Postgres access from Python, not Supabase REST.
-- Use typed tRPC endpoints for frontend access.
-- Keep jobs idempotent.
-- Add raw response storage before implementing large historical syncs.
-- Add logging to every ingestion job.
-- Avoid committing local .env, .venv, logs, or generated cache files.
-- When adding new sync jobs, include:
--   source endpoint
--   transform function
--   upsert SQL
--   logging
--   raw response storage if applicable
+# Expected Structure
 
-Near-Term Tasks:
-- Verify generated DB types exist.
-- Finish sync_teams.
-- Run sync_teams locally.
-- Verify records in Supabase Studio.
-- Implement sync_players.
-- Add ingestion run logging.
-- Add raw response storage helper.
-- Implement games sync.
-- Future Enhancements
-- Dockerize apps/nba-ingestion.
-- Add Docker Compose command for ingestion.
-- Add cron-based sync.
-- Add tRPC routes for players, teams, games, and chart data.
-- Add graph metadata registry.
-- Add player dashboard UI.
-- Add team dashboard UI.
-- Add game detail page.
-- Add shot chart support.
-- Add play-by-play support.
-- Add lineup and advanced split endpoints.
+```txt
+apps/nba-ingestion/
+  requirements.txt
+  .env.example
+  README.md
+  src/
+    main.py
+    config.py
+    db.py
+    logger.py
+    jobs/
+    nba/
+```
+
+---
+
+# Near-Term Tasks
+
+- Verify DB types
+- Verify `sync_teams`
+- Verify `sync_players`
+- Add ingestion run logging
+- Finish raw response storage helper
+- Verify game sync rows
+- Verify raw response rows
+- Continue hardening malformed response handling
+
+---
+
+# Future Enhancements
+
+- Dockerize ingestion app
+- Add Docker Compose ingestion service
+- Add cron-based sync
+- Add tRPC routes
+- Add graph metadata registry
+- Add dashboard UI
+- Add shot chart support
+- Add play-by-play support
+- Add lineup/split endpoints
