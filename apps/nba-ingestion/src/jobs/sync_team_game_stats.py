@@ -7,6 +7,7 @@ from datetime import datetime
 from config import get_settings
 from db import get_connection
 from nba.client import get_league_game_log
+from raw_store import store_raw_api_response
 
 logger = logging.getLogger(__name__)
 
@@ -52,6 +53,16 @@ def sync_team_game_stats(season: str) -> None:
         season=season,
         season_type=season_type,
         player_or_team_abbreviation="T",
+    )
+    store_raw_api_response(
+        endpoint_name="leaguegamelog",
+        endpoint_params={
+            "season": season,
+            "season_type": season_type,
+            "player_or_team_abbreviation": "T",
+        },
+        response_json=rows,
+        season_id=season,
     )
 
     upsert_sql = """

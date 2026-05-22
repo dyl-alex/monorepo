@@ -3,6 +3,7 @@ import json
 from db import get_connection
 from nba.client import get_static_players
 from nba.transforms import player_headshot_url
+from raw_store import store_raw_api_response
 
 logger = logging.getLogger(__name__)
 
@@ -16,6 +17,11 @@ def split_name(full_name: str) -> tuple[str | None, str | None]:
 
 def sync_players() -> None:
     players = get_static_players()
+    store_raw_api_response(
+        endpoint_name="static.players",
+        endpoint_params={},
+        response_json=players,
+    )
 
     sql = """
     insert into public.players (

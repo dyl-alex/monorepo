@@ -5,6 +5,7 @@ from datetime import datetime
 from config import get_settings
 from db import get_connection
 from nba.client import get_league_games
+from raw_store import store_raw_api_response
 
 logger = logging.getLogger(__name__)
 
@@ -141,6 +142,15 @@ def sync_games(season: str) -> None:
     _upsert_season(season)
 
     rows = get_league_games(season=season, season_type=season_type)
+    store_raw_api_response(
+        endpoint_name="leaguegamefinder",
+        endpoint_params={
+            "season": season,
+            "season_type": season_type,
+        },
+        response_json=rows,
+        season_id=season,
+    )
     games_by_id: dict[str, list[dict]] = {}
     for row in rows:
         game_id = str(row.get("GAME_ID") or "").strip()

@@ -6,6 +6,7 @@ from datetime import datetime
 from config import get_settings
 from db import get_connection
 from nba.client import get_boxscore_advanced
+from raw_store import store_raw_api_response
 
 logger = logging.getLogger(__name__)
 
@@ -103,6 +104,13 @@ def enrich_team_game_advanced(season: str, limit: int | None = None) -> None:
                 logger.info("Enriching advanced team stats game_id=%s (%s/%s)", game_id, processed_games, len(game_ids))
                 try:
                     advanced = get_boxscore_advanced(game_id)
+                    store_raw_api_response(
+                        endpoint_name="boxscoreadvancedv2",
+                        endpoint_params={"game_id": game_id},
+                        response_json=advanced,
+                        season_id=season,
+                        game_id=game_id,
+                    )
                     now_utc = datetime.utcnow()
                     for row in advanced.get("team_stats", []):
                         team_id = _to_int(row.get("TEAM_ID"))

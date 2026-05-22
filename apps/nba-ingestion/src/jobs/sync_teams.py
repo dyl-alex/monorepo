@@ -3,12 +3,18 @@ import json
 from db import get_connection
 from nba.client import get_static_teams
 from nba.transforms import team_logo_url
+from raw_store import store_raw_api_response
 
 logger = logging.getLogger(__name__)
 
 
 def sync_teams() -> None:
     teams = get_static_teams()
+    store_raw_api_response(
+        endpoint_name="static.teams",
+        endpoint_params={},
+        response_json=teams,
+    )
 
     sql = """
     insert into public.teams (
