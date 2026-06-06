@@ -1,12 +1,35 @@
 import hashlib
 import json
+import math
 from datetime import datetime
 
 from db import get_connection
 
 
-def _json_dumps(value) -> str:
-    return json.dumps(value, sort_keys=True, separators=(",", ":"), default=str)
+def sanitize_json_value(value):
+    if isinstance(value, dict):
+        return {key: sanitize_json_value(item) for key, item in value.items()}
+
+    if isinstance(value, list):
+        return [sanitize_json_value(item) for item in value]
+
+    if isinstance(value, tuple):
+        return [sanitize_json_value(item) for item in value]
+
+    if isinstance(value, float) and not math.isfinite(value):
+        return None
+
+    return value
+
+
+def jsonb_dumps(value, *, sort_keys: bool = True) -> str:
+    return json.dumps(
+        sanitize_json_value(value),
+        sort_keys=sort_keys,
+        separators=(",", ":"),
+        default=str,
+        allow_nan=False,
+    )
 
 
 def _response_hash(endpoint_name: str, endpoint_params: dict, response_json) -> str:
@@ -15,7 +38,7 @@ def _response_hash(endpoint_name: str, endpoint_params: dict, response_json) -> 
         "endpoint_params": endpoint_params,
         "response_json": response_json,
     }
-    return hashlib.sha256(_json_dumps(payload).encode("utf-8")).hexdigest()
+    return hashlib.sha256(jsonb_dumps(payload).encode("utf-8")).hexdigest()
 
 
 def store_raw_api_response(
@@ -70,8 +93,8 @@ def store_raw_api_response(
                 sql,
                 {
                     "endpoint_name": endpoint_name,
-                    "endpoint_params": _json_dumps(endpoint_params),
-                    "response_json": _json_dumps(response_json),
+                    "endpoint_params": jsonb_dumps(endpoint_params),
+                    "response_json": jsonb_dumps(response_json),
                     "response_hash": response_hash,
                     "season_id": season_id,
                     "game_id": game_id,

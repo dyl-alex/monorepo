@@ -1,9 +1,8 @@
 import logging
-import json
 from db import get_connection
 from nba.client import get_static_teams
 from nba.transforms import team_logo_url
-from raw_store import store_raw_api_response
+from raw_store import jsonb_dumps, store_raw_api_response
 
 logger = logging.getLogger(__name__)
 
@@ -68,7 +67,7 @@ def sync_teams() -> None:
                         "state": team.get("state"),
                         "year_founded": team.get("year_founded"),
                         "logo_url": team_logo_url(team_id),
-                        "raw": json.dumps(team),
+                        "raw": jsonb_dumps(team),
                     },
                 )
 

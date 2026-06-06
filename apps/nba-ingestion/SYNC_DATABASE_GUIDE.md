@@ -83,6 +83,30 @@ python -m main sync-daily
 python -m main backfill --season 2024-25
 ```
 
+### Range Backfill
+
+Backfills an inclusive season range. The default order is newest-to-oldest.
+
+```powershell
+python -m main backfill-range --from-season 1979-80 --to-season 2024-25 --season-type "Regular Season" --include games
+```
+
+Recommended phases for a full historical database:
+
+```powershell
+python -m main backfill-range --from-season 1979-80 --to-season 2024-25 --season-type "Regular Season" --include games
+python -m main backfill-range --from-season 1979-80 --to-season 2024-25 --season-type "Regular Season" --include team-game-stats --skip-static
+python -m main backfill-range --from-season 1979-80 --to-season 2024-25 --season-type "Regular Season" --include player-game-stats --skip-static
+```
+
+Options:
+
+- `--include games team-game-stats` runs selected phases.
+- `--include all` runs games, team stats, and player stats for each season.
+- `--skip-static` skips the initial teams and players sync.
+- `--oldest-first` runs from oldest season to newest season.
+- `--stop-on-error` fails on the first season/step error instead of logging and continuing.
+
 ## 4) Suggested Execution Order
 
 Run in this order to satisfy foreign keys and data dependencies:

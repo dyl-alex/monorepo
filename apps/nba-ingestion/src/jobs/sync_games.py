@@ -1,11 +1,10 @@
 import logging
-import json
 from datetime import datetime
 
 from config import get_settings
 from db import get_connection
 from nba.client import get_league_games
-from raw_store import store_raw_api_response
+from raw_store import jsonb_dumps, store_raw_api_response
 
 logger = logging.getLogger(__name__)
 
@@ -129,13 +128,13 @@ def _game_from_rows(game_id: str, rows: list[dict], season: str, season_type: st
         "arena": None,
         "city": None,
         "state": None,
-        "raw": json.dumps(rows),
+        "raw": jsonb_dumps(rows),
     }
 
 
-def sync_games(season: str) -> None:
+def sync_games(season: str, season_type: str | None = None) -> None:
     settings = get_settings()
-    season_type = settings.default_season_type
+    season_type = season_type or settings.default_season_type
 
     logger.info("Starting sync_games season=%s season_type=%s", season, season_type)
 

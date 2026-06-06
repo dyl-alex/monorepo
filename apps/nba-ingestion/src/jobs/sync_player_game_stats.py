@@ -1,4 +1,3 @@
-import json
 import logging
 import math
 import re
@@ -8,7 +7,7 @@ from datetime import datetime
 from config import get_settings
 from db import get_connection
 from nba.client import get_league_game_log
-from raw_store import store_raw_api_response
+from raw_store import jsonb_dumps, store_raw_api_response
 
 logger = logging.getLogger(__name__)
 
@@ -64,9 +63,9 @@ def _parse_matchup(matchup: str | None) -> tuple[bool | None, str | None]:
     return None, None
 
 
-def sync_player_game_stats(season: str) -> None:
+def sync_player_game_stats(season: str, season_type: str | None = None) -> None:
     settings = get_settings()
-    season_type = settings.default_season_type
+    season_type = season_type or settings.default_season_type
     commit_batch_games = settings.sync_commit_batch_games
     commit_interval_seconds = 20
 
@@ -268,7 +267,7 @@ def sync_player_game_stats(season: str) -> None:
                         "free_throws_attempted": _to_int(row.get("FTA")),
                         "free_throw_pct": _to_float(row.get("FT_PCT")),
                         "source_endpoint": "leaguegamelog",
-                        "raw": json.dumps(row),
+                        "raw": jsonb_dumps(row),
                         "fetched_at": now_utc,
                     },
                 )

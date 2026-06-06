@@ -180,6 +180,35 @@ python -m main backfill --season 2024-25
 
 ---
 
+### Backfill a range of seasons
+
+Backfills seasons inclusively. By default, this runs newest-to-oldest, which is useful when working backward from the current data.
+
+```bash
+python -m main backfill-range --from-season 1979-80 --to-season 2024-25 --season-type "Regular Season" --include games
+```
+
+Available include steps:
+
+```txt
+games
+team-game-stats
+player-game-stats
+all
+```
+
+Recommended phased backfill:
+
+```bash
+python -m main backfill-range --from-season 1979-80 --to-season 2024-25 --season-type "Regular Season" --include games
+python -m main backfill-range --from-season 1979-80 --to-season 2024-25 --season-type "Regular Season" --include team-game-stats --skip-static
+python -m main backfill-range --from-season 1979-80 --to-season 2024-25 --season-type "Regular Season" --include player-game-stats --skip-static
+```
+
+Use `--oldest-first` to run `1979-80` first. Use `--stop-on-error` if you want the command to fail fast instead of logging failures and continuing.
+
+---
+
 ## Verifying Data
 
 Open Supabase Studio and verify records were inserted into tables such as:
