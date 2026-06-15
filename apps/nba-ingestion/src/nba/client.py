@@ -4,7 +4,15 @@ from tenacity import retry, stop_after_attempt, wait_exponential, retry_if_excep
 
 from config import get_settings
 from nba_api.stats.static import teams, players
-from nba_api.stats.endpoints import leaguegamefinder, leaguegamelog, boxscoretraditionalv2, boxscoreadvancedv2
+from nba_api.stats.endpoints import (
+    boxscoreadvancedv2,
+    boxscoretraditionalv2,
+    commonplayerinfo,
+    leaguedashplayerstats,
+    leaguedashteamstats,
+    leaguegamefinder,
+    leaguegamelog,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -162,3 +170,73 @@ def get_boxscore_advanced(game_id: str) -> dict[str, list[dict]]:
         "player_stats": _records_from_frame_list(frames, 0),
         "team_stats": _records_from_frame_list(frames, 1),
     }
+
+
+@retry(
+    reraise=True,
+    stop=lambda retry_state: stop_after_attempt(_retry_attempts())(retry_state),
+    wait=wait_exponential(multiplier=0.5, min=0.5, max=4),
+    retry=retry_if_exception_type(Exception),
+)
+def get_common_player_info(player_id: int) -> dict[str, list[dict]]:
+    endpoint = commonplayerinfo.CommonPlayerInfo(
+        player_id=player_id,
+        timeout=_timeout(),
+        get_request=False,
+    )
+    try:
+        endpoint.get_request()
+    except Exception:
+        _log_endpoint_failure("CommonPlayerInfo", endpoint)
+        raise
+    return {
+        "common_player_info": endpoint.common_player_info.get_data_frame().to_dict("records"),
+        "player_headline_stats": endpoint.player_headline_stats.get_data_frame().to_dict("records"),
+        "available_seasons": endpoint.available_seasons.get_data_frame().to_dict("records"),
+    }
+
+
+@retry(
+    reraise=True,
+    stop=lambda retry_state: stop_after_attempt(_retry_attempts())(retry_state),
+    wait=wait_exponential(multiplier=0.5, min=0.5, max=4),
+    retry=retry_if_exception_type(Exception),
+)
+def get_league_dash_player_stats(season: str, season_type: str, stat_mode: str) -> list[dict]:
+    endpoint = leaguedashplayerstats.LeagueDashPlayerStats(
+        season=season,
+        season_type_all_star=season_type,
+        per_mode_detailed=stat_mode,
+        measure_type_detailed_defense="Base",
+        timeout=_timeout(),
+        get_request=False,
+    )
+    try:
+        endpoint.get_request()
+    except Exception:
+        _log_endpoint_failure("LeagueDashPlayerStats", endpoint)
+        raise
+    return endpoint.league_dash_player_stats.get_data_frame().to_dict("records")
+
+
+@retry(
+    reraise=True,
+    stop=lambda retry_state: stop_after_attempt(_retry_attempts())(retry_state),
+    wait=wait_exponential(multiplier=0.5, min=0.5, max=4),
+    retry=retry_if_exception_type(Exception),
+)
+def get_league_dash_team_stats(season: str, season_type: str, stat_mode: str) -> list[dict]:
+    endpoint = leaguedashteamstats.LeagueDashTeamStats(
+        season=season,
+        season_type_all_star=season_type,
+        per_mode_detailed=stat_mode,
+        measure_type_detailed_defense="Base",
+        timeout=_timeout(),
+        get_request=False,
+    )
+    try:
+        endpoint.get_request()
+    except Exception:
+        _log_endpoint_failure("LeagueDashTeamStats", endpoint)
+        raise
+    return endpoint.league_dash_team_stats.get_data_frame().to_dict("records")

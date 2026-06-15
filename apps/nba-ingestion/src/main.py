@@ -8,8 +8,11 @@ from logger import configure_logging
 from jobs.sync_teams import sync_teams
 from jobs.sync_players import sync_players
 from jobs.sync_games import sync_games
+from jobs.sync_player_profiles import sync_player_profiles
 from jobs.sync_player_game_stats import sync_player_game_stats
+from jobs.sync_player_season_stats import sync_player_season_stats
 from jobs.sync_team_game_stats import sync_team_game_stats
+from jobs.sync_team_season_stats import sync_team_season_stats
 from jobs.enrich_team_game_advanced import enrich_team_game_advanced
 from jobs.backfill_range import backfill_range
 
@@ -29,16 +32,28 @@ def _execute_command(args: argparse.Namespace) -> None:
         sync_players()
         return
 
+    if command == "sync-player-profiles":
+        sync_player_profiles(only_missing=args.only_missing, limit=args.limit)
+        return
+
     if command == "sync-games":
-        sync_games(season, season_type=season_type)
+        sync_games(season, season_type=season_type, only_missing=args.only_missing)
         return
 
     if command == "sync-player-game-stats":
-        sync_player_game_stats(season, season_type=season_type)
+        sync_player_game_stats(season, season_type=season_type, only_missing=args.only_missing)
         return
 
     if command == "sync-team-game-stats":
-        sync_team_game_stats(season, season_type=season_type)
+        sync_team_game_stats(season, season_type=season_type, only_missing=args.only_missing)
+        return
+
+    if command == "sync-player-season-stats":
+        sync_player_season_stats(season, season_type=season_type, only_missing=args.only_missing)
+        return
+
+    if command == "sync-team-season-stats":
+        sync_team_season_stats(season, season_type=season_type, only_missing=args.only_missing)
         return
 
     if command == "enrich-team-game-advanced":
@@ -48,15 +63,21 @@ def _execute_command(args: argparse.Namespace) -> None:
     if command == "sync-daily":
         sync_teams()
         sync_players()
-        sync_games(season, season_type=season_type)
+        sync_games(season, season_type=season_type, only_missing=args.only_missing)
+        sync_team_game_stats(season, season_type=season_type, only_missing=args.only_missing)
+        sync_player_game_stats(season, season_type=season_type, only_missing=args.only_missing)
+        sync_team_season_stats(season, season_type=season_type, only_missing=args.only_missing)
+        sync_player_season_stats(season, season_type=season_type, only_missing=args.only_missing)
         return
 
     if command == "backfill":
         sync_teams()
         sync_players()
-        sync_games(season, season_type=season_type)
-        sync_team_game_stats(season, season_type=season_type)
-        sync_player_game_stats(season, season_type=season_type)
+        sync_games(season, season_type=season_type, only_missing=args.only_missing)
+        sync_team_game_stats(season, season_type=season_type, only_missing=args.only_missing)
+        sync_player_game_stats(season, season_type=season_type, only_missing=args.only_missing)
+        sync_team_season_stats(season, season_type=season_type, only_missing=args.only_missing)
+        sync_player_season_stats(season, season_type=season_type, only_missing=args.only_missing)
         return
 
     if command == "backfill-range":
@@ -68,6 +89,7 @@ def _execute_command(args: argparse.Namespace) -> None:
             oldest_first=args.oldest_first,
             skip_static=args.skip_static,
             stop_on_error=args.stop_on_error,
+            only_missing=args.only_missing,
         )
         return
 
@@ -84,9 +106,12 @@ def main() -> None:
         choices=[
             "sync-teams",
             "sync-players",
+            "sync-player-profiles",
             "sync-games",
             "sync-player-game-stats",
             "sync-team-game-stats",
+            "sync-player-season-stats",
+            "sync-team-season-stats",
             "enrich-team-game-advanced",
             "sync-daily",
             "backfill",
@@ -101,12 +126,22 @@ def main() -> None:
     parser.add_argument(
         "--include",
         nargs="+",
-        choices=["all", "games", "team-game-stats", "player-game-stats"],
+        choices=[
+            "all",
+            "player-profiles",
+            "games",
+            "team-game-stats",
+            "player-game-stats",
+            "team-season-stats",
+            "player-season-stats",
+            "season-stats",
+        ],
         default=["all"],
     )
     parser.add_argument("--oldest-first", action="store_true")
     parser.add_argument("--skip-static", action="store_true")
     parser.add_argument("--stop-on-error", action="store_true")
+    parser.add_argument("--only-missing", action="store_true")
 
     args = parser.parse_args()
     run_id = start_ingestion_run(
@@ -124,6 +159,7 @@ def main() -> None:
             "oldest_first": args.oldest_first,
             "skip_static": args.skip_static,
             "stop_on_error": args.stop_on_error,
+            "only_missing": args.only_missing,
         },
     )
 

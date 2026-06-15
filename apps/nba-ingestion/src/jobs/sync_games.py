@@ -132,7 +132,23 @@ def _game_from_rows(game_id: str, rows: list[dict], season: str, season_type: st
     }
 
 
-def sync_games(season: str, season_type: str | None = None) -> None:
+def _existing_game_ids(game_ids: list[str]) -> set[str]:
+    if not game_ids:
+        return set()
+
+    sql = """
+    select game_id
+    from public.games
+    where game_id = any(%(game_ids)s)
+    """
+
+    with get_connection() as conn:
+        with conn.cursor() as cur:
+            cur.execute(sql, {"game_ids": game_ids})
+            return {row[0] for row in cur.fetchall()}
+
+
+def sync_games(season: str, season_type: str | None = None, only_missing: bool = False) -> None:
     settings = get_settings()
     season_type = season_type or settings.default_season_type
 
@@ -233,6 +249,18 @@ def sync_games(season: str, season_type: str | None = None) -> None:
         _game_from_rows(game_id=game_id, rows=game_rows, season=season, season_type=season_type)
         for game_id, game_rows in games_by_id.items()
     ]
+    source_game_rows = len(game_rows)
+
+    if only_missing:
+        existing_game_ids = _existing_game_ids([game["game_id"] for game in game_rows])
+        game_rows = [game for game in game_rows if game["game_id"] not in existing_game_ids]
+        logger.info(
+            "Filtered existing games season=%s source_games=%s missing_games=%s skipped_games=%s",
+            season,
+            source_game_rows,
+            len(game_rows),
+            source_game_rows - len(game_rows),
+        )
 
     with get_connection() as conn:
         with conn.cursor() as cur:

@@ -63,7 +63,21 @@ def _parse_matchup(matchup: str | None) -> tuple[bool | None, str | None]:
     return None, None
 
 
-def sync_player_game_stats(season: str, season_type: str | None = None) -> None:
+def _existing_player_stat_keys(season: str, season_type: str) -> set[tuple[str, int, int]]:
+    sql = """
+    select game_id, player_id, team_id
+    from public.player_game_stats
+    where season_id = %(season_id)s
+      and season_type = %(season_type)s
+    """
+
+    with get_connection() as conn:
+        with conn.cursor() as cur:
+            cur.execute(sql, {"season_id": season, "season_type": season_type})
+            return {(row[0], row[1], row[2]) for row in cur.fetchall()}
+
+
+def sync_player_game_stats(season: str, season_type: str | None = None, only_missing: bool = False) -> None:
     settings = get_settings()
     season_type = season_type or settings.default_season_type
     commit_batch_games = settings.sync_commit_batch_games
@@ -208,8 +222,10 @@ def sync_player_game_stats(season: str, season_type: str | None = None) -> None:
     total_rows = 0
     processed_rows = 0
     duplicate_rows_skipped = 0
+    existing_rows_skipped = 0
     last_commit_at = time.monotonic()
     seen_keys: set[tuple[str, int, int]] = set()
+    existing_keys = _existing_player_stat_keys(season, season_type) if only_missing else set()
 
     with get_connection() as conn:
         with conn.cursor() as cur:
@@ -226,6 +242,9 @@ def sync_player_game_stats(season: str, season_type: str | None = None) -> None:
                     duplicate_rows_skipped += 1
                     continue
                 seen_keys.add(unique_key)
+                if unique_key in existing_keys:
+                    existing_rows_skipped += 1
+                    continue
 
                 is_home, opponent_abbreviation = _parse_matchup(row.get("MATCHUP"))
                 opponent_team_id = team_id_by_abbr.get(opponent_abbreviation) if opponent_abbreviation else None
@@ -286,9 +305,10 @@ def sync_player_game_stats(season: str, season_type: str | None = None) -> None:
         conn.commit()
 
     logger.info(
-        "Completed baseline sync_player_game_stats season=%s processed_rows=%s upserted_rows=%s duplicate_rows_skipped=%s",
+        "Completed baseline sync_player_game_stats season=%s processed_rows=%s upserted_rows=%s duplicate_rows_skipped=%s existing_rows_skipped=%s",
         season,
         processed_rows,
         total_rows,
         duplicate_rows_skipped,
+        existing_rows_skipped,
     )

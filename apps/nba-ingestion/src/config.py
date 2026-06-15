@@ -14,6 +14,8 @@ class Settings:
     sync_commit_batch_games: int = 25
     nba_api_timeout_seconds: int = 8
     nba_api_max_retries: int = 2
+    nba_api_profile_delay_seconds: float = 0.6
+    nba_api_backfill_step_delay_seconds: float = 1.0
 
 
 def get_settings() -> Settings:
@@ -30,4 +32,6 @@ def get_settings() -> Settings:
         sync_commit_batch_games=max(1, int(os.getenv("SYNC_COMMIT_BATCH_GAMES", "25"))),
         nba_api_timeout_seconds=max(1, int(os.getenv("NBA_API_TIMEOUT_SECONDS", "8"))),
         nba_api_max_retries=max(1, int(os.getenv("NBA_API_MAX_RETRIES", "2"))),
+        nba_api_profile_delay_seconds=max(0.0, float(os.getenv("NBA_API_PROFILE_DELAY_SECONDS", "0.6"))),
+        nba_api_backfill_step_delay_seconds=max(0.0, float(os.getenv("NBA_API_BACKFILL_STEP_DELAY_SECONDS", "1.0"))),
     )

@@ -19,6 +19,10 @@ LOG_LEVEL=INFO
 NBA_SEASON=2024-25
 NBA_SEASON_TYPE=Regular Season
 SYNC_COMMIT_BATCH_GAMES=25
+NBA_API_TIMEOUT_SECONDS=20
+NBA_API_MAX_RETRIES=2
+NBA_API_PROFILE_DELAY_SECONDS=1.0
+NBA_API_BACKFILL_STEP_DELAY_SECONDS=1.0
 ```
 
 ## 2) Shell Setup
@@ -47,6 +51,20 @@ python -m main sync-teams
 python -m main sync-players
 ```
 
+### Player Profiles
+
+```powershell
+python -m main sync-player-profiles --only-missing
+```
+
+This endpoint makes one request per player. Failed player profile requests are logged and skipped so the job can continue; rerun the same command to fill missed profiles.
+
+For safer profile backfills, run in chunks:
+
+```powershell
+python -m main sync-player-profiles --only-missing --limit 100
+```
+
 ### Games
 
 ```powershell
@@ -69,6 +87,18 @@ python -m main enrich-team-game-advanced --season 2024-25 --limit 50
 
 ```powershell
 python -m main sync-player-game-stats --season 2024-25
+```
+
+### Team Season Stats
+
+```powershell
+python -m main sync-team-season-stats --season 2024-25 --season-type "Regular Season" --only-missing
+```
+
+### Player Season Stats
+
+```powershell
+python -m main sync-player-season-stats --season 2024-25 --season-type "Regular Season" --only-missing
 ```
 
 ### Daily bundle
@@ -94,18 +124,44 @@ python -m main backfill-range --from-season 1979-80 --to-season 2024-25 --season
 Recommended phases for a full historical database:
 
 ```powershell
+python -m main sync-player-profiles --only-missing
 python -m main backfill-range --from-season 1979-80 --to-season 2024-25 --season-type "Regular Season" --include games
 python -m main backfill-range --from-season 1979-80 --to-season 2024-25 --season-type "Regular Season" --include team-game-stats --skip-static
 python -m main backfill-range --from-season 1979-80 --to-season 2024-25 --season-type "Regular Season" --include player-game-stats --skip-static
+python -m main backfill-range --from-season 1979-80 --to-season 2024-25 --season-type "Regular Season" --include team-season-stats --skip-static --only-missing
+python -m main backfill-range --from-season 1979-80 --to-season 2024-25 --season-type "Regular Season" --include player-season-stats --skip-static --only-missing
 ```
 
 Options:
 
 - `--include games team-game-stats` runs selected phases.
-- `--include all` runs games, team stats, and player stats for each season.
+- `--include season-stats` runs team and player season stats.
+- `--include all` runs player profiles once, then all season-ranged phases.
 - `--skip-static` skips the initial teams and players sync.
 - `--oldest-first` runs from oldest season to newest season.
 - `--stop-on-error` fails on the first season/step error instead of logging and continuing.
+- `--only-missing` skips normalized rows that already exist in Postgres after checking the source endpoint.
+
+## 3.1) Initial Load vs Ongoing Sync
+
+For a fresh local Supabase instance, run the historical load in phases:
+
+```powershell
+python -m main sync-player-profiles --only-missing
+python -m main backfill-range --from-season 1979-80 --to-season 2024-25 --season-type "Regular Season" --include games
+python -m main backfill-range --from-season 1979-80 --to-season 2024-25 --season-type "Regular Season" --include team-game-stats --skip-static
+python -m main backfill-range --from-season 1979-80 --to-season 2024-25 --season-type "Regular Season" --include player-game-stats --skip-static
+python -m main backfill-range --from-season 1979-80 --to-season 2024-25 --season-type "Regular Season" --include team-season-stats --skip-static --only-missing
+python -m main backfill-range --from-season 1979-80 --to-season 2024-25 --season-type "Regular Season" --include player-season-stats --skip-static --only-missing
+```
+
+After the historical load, switch to incremental current-season syncs:
+
+```powershell
+python -m main sync-daily --season 2024-25 --season-type "Regular Season" --only-missing
+```
+
+`sync-daily` refreshes teams and players, then checks current-season games, game stats, and season stats. With `--only-missing`, existing normalized rows are not rewritten.
 
 ## 4) Suggested Execution Order
 
@@ -117,6 +173,8 @@ Run in this order to satisfy foreign keys and data dependencies:
 4. `sync-team-game-stats --season <season>` (fast baseline)
 5. `enrich-team-game-advanced --season <season> --limit <n>` (optional slow enrichment)
 6. `sync-player-game-stats --season <season>`
+7. `sync-team-season-stats --season <season>`
+8. `sync-player-season-stats --season <season>`
 
 ## 5) Validation SQL
 
@@ -134,6 +192,16 @@ where season_id = '2024-25';
 
 select count(*) as player_game_stats_count
 from public.player_game_stats
+where season_id = '2024-25';
+
+select count(*) as player_profiles_count from public.player_profiles;
+
+select count(*) as team_season_stats_count
+from public.team_season_stats
+where season_id = '2024-25';
+
+select count(*) as player_season_stats_count
+from public.player_season_stats
 where season_id = '2024-25';
 ```
 
@@ -158,6 +226,26 @@ from public.player_game_stats pgs
 left join public.games g on g.game_id = pgs.game_id
 where pgs.season_id = '2024-25'
   and g.game_id is null;
+
+select count(*) as player_profiles_missing_player_fk
+from public.player_profiles pp
+left join public.players p on p.player_id = pp.player_id
+where p.player_id is null;
+
+select count(*) as team_season_stats_missing_fk
+from public.team_season_stats tss
+left join public.teams t on t.team_id = tss.team_id
+left join public.seasons s on s.season_id = tss.season_id
+where tss.season_id = '2024-25'
+  and (t.team_id is null or s.season_id is null);
+
+select count(*) as player_season_stats_missing_fk
+from public.player_season_stats pss
+left join public.players p on p.player_id = pss.player_id
+left join public.teams t on t.team_id = pss.team_id
+left join public.seasons s on s.season_id = pss.season_id
+where pss.season_id = '2024-25'
+  and (p.player_id is null or t.team_id is null or s.season_id is null);
 ```
 
 ## 6) Idempotency Checks
@@ -212,8 +300,33 @@ python -c "import psycopg; psycopg.connect('postgresql://postgres:postgres@127.0
 
 - Re-run the same season command; sync is idempotent.
 - Keep `LOG_LEVEL=INFO` (or set to `WARNING`) to reduce log noise.
+- Use a larger NBA API timeout for season backfills:
+
+```env
+NBA_API_TIMEOUT_SECONDS=20
+NBA_API_BACKFILL_STEP_DELAY_SECONDS=1.0
+```
+
 - If requests are unstable, reduce batch size (for more frequent checkpoint commits), for example:
 
 ```env
 SYNC_COMMIT_BATCH_GAMES=10
+```
+
+### Flaky player profile sync
+
+`sync-player-profiles` calls `CommonPlayerInfo` once per player, so intermittent NBA API failures are expected on large historical runs.
+
+- Rerun with `--only-missing`; already inserted profiles are skipped.
+- Increase timeout and request spacing if failures are frequent:
+
+```env
+NBA_API_TIMEOUT_SECONDS=20
+NBA_API_PROFILE_DELAY_SECONDS=1.0
+```
+
+Then run in chunks:
+
+```powershell
+python -m main sync-player-profiles --only-missing --limit 100
 ```

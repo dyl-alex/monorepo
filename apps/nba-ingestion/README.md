@@ -140,6 +140,22 @@ python -m main sync-players
 
 ---
 
+### Sync player profiles
+
+```bash
+python -m main sync-player-profiles --only-missing
+```
+
+This command calls one NBA profile endpoint per player. If some profile requests fail, rerun the command; `--only-missing` will skip profiles already inserted.
+
+For large profile backfills, prefer chunks:
+
+```bash
+python -m main sync-player-profiles --only-missing --limit 100
+```
+
+---
+
 ### Sync games for a season
 
 ```bash
@@ -160,6 +176,22 @@ python -m main sync-player-game-stats --season 2024-25
 
 ```bash
 python -m main sync-team-game-stats --season 2024-25
+```
+
+---
+
+### Sync team season stats
+
+```bash
+python -m main sync-team-season-stats --season 2024-25 --season-type "Regular Season" --only-missing
+```
+
+---
+
+### Sync player season stats
+
+```bash
+python -m main sync-player-season-stats --season 2024-25 --season-type "Regular Season" --only-missing
 ```
 
 ---
@@ -191,21 +223,34 @@ python -m main backfill-range --from-season 1979-80 --to-season 2024-25 --season
 Available include steps:
 
 ```txt
+player-profiles
 games
 team-game-stats
 player-game-stats
+team-season-stats
+player-season-stats
+season-stats
 all
 ```
 
 Recommended phased backfill:
 
 ```bash
+python -m main sync-player-profiles --only-missing
 python -m main backfill-range --from-season 1979-80 --to-season 2024-25 --season-type "Regular Season" --include games
 python -m main backfill-range --from-season 1979-80 --to-season 2024-25 --season-type "Regular Season" --include team-game-stats --skip-static
 python -m main backfill-range --from-season 1979-80 --to-season 2024-25 --season-type "Regular Season" --include player-game-stats --skip-static
+python -m main backfill-range --from-season 1979-80 --to-season 2024-25 --season-type "Regular Season" --include team-season-stats --skip-static --only-missing
+python -m main backfill-range --from-season 1979-80 --to-season 2024-25 --season-type "Regular Season" --include player-season-stats --skip-static --only-missing
 ```
 
 Use `--oldest-first` to run `1979-80` first. Use `--stop-on-error` if you want the command to fail fast instead of logging failures and continuing.
+
+Use `--only-missing` for ongoing syncs after the initial load. This still checks the source endpoint, but skips normalized rows that already exist in Postgres.
+
+```bash
+python -m main sync-daily --season 2024-25 --season-type "Regular Season" --only-missing
+```
 
 ---
 
