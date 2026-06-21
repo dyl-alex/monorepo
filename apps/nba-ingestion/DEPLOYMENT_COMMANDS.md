@@ -6,7 +6,7 @@ Set these environment variables in the server shell or script before parsing com
 
 ```bash
 NBA_BACKFILL_FROM_SEASON=1979-80
-NBA_BACKFILL_TO_SEASON=2024-25
+NBA_BACKFILL_TO_SEASON=2025-26
 NBA_SEASON_STATS_FROM_SEASON=1995-96
 NBA_CURRENT_SEASON=2024-25
 ```
