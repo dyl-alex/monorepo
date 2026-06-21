@@ -1,34 +1,55 @@
-import { Card, CardContent, CardDescription, CardHeader } from "@/components/ui/card";
-import StatContainer from "./StatContainer";
-import { ChartBar } from "lucide-react";
-import { Input } from "@/components/ui/input";
+import { dehydrate, HydrationBoundary } from "@tanstack/react-query";
 
-export default function Home() {
+import { HomeDashboard } from "@/features/player-dashboard/home-dashboard";
+import type { StatsView } from "@/features/player-dashboard/dashboard-state";
+import { getQueryClient, trpc } from "@/trpc/server";
+
+const DEFAULT_SEASON = "2025-26";
+
+export default async function Home({
+  searchParams,
+}: {
+  searchParams: Promise<Record<string, string | string[] | undefined>>;
+}) {
+  const params = await searchParams;
+  const playerIdValue = Array.isArray(params.playerId)
+    ? params.playerId[0]
+    : params.playerId;
+  const parsedPlayerId = playerIdValue ? Number(playerIdValue) : null;
+  const playerId =
+    parsedPlayerId && Number.isInteger(parsedPlayerId) && parsedPlayerId > 0
+      ? parsedPlayerId
+      : null;
+  const view: StatsView = params.view === "games" ? "games" : "career";
+  const seasonValue = Array.isArray(params.season)
+    ? params.season[0]
+    : params.season;
+  const season = /^\d{4}-\d{2}$/.test(seasonValue ?? "")
+    ? seasonValue!
+    : DEFAULT_SEASON;
+  const queryClient = getQueryClient();
+
+  void queryClient.prefetchQuery(
+    trpc.player.search.queryOptions({ query: "", limit: 10 }),
+  );
+
+  if (playerId != null) {
+    void queryClient.prefetchQuery(
+      trpc.player.profile.queryOptions({ playerId }),
+    );
+    void queryClient.prefetchQuery(
+      trpc.player.seasonStats.queryOptions({ playerId }),
+    );
+    if (view === "games") {
+      void queryClient.prefetchQuery(
+        trpc.player.gameStats.queryOptions({ playerId, seasonId: season }),
+      );
+    }
+  }
+
   return (
-    <div className="flex flex-col">
-      <Card className="w-full mx-auto max-w-sm">
-        <CardHeader>
-          Welcome to NBA Compare
-        </CardHeader>
-        <CardDescription>
-          Please enter in a players name below to view basic statistics.
-        </CardDescription>
-        <CardContent>
-          <Input/>
-          <StatContainer/>
-        </CardContent>
-      </Card>
-
-      <Card className="w-full mx-auto max-w-sm">
-        <CardHeader>
-          Chart view
-        </CardHeader>
-        <CardContent>
-          <ChartBar>
-
-          </ChartBar>
-        </CardContent>
-      </Card>
-    </div>
+    <HydrationBoundary state={dehydrate(queryClient)}>
+      <HomeDashboard playerId={playerId} view={view} season={season} />
+    </HydrationBoundary>
   );
 }
